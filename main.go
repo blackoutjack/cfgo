@@ -1,6 +1,7 @@
 package main
 
 import (
+    "flag"
     "fmt"
     "os"
 
@@ -34,10 +35,16 @@ func getParser() *tree_sitter.Parser {
 }
 
 func main() {
-    if len(os.Args) < 2 {
+
+    noCFG := flag.Bool("no-cfg", false, "print the AST but do not generate CFGs")
+    noAST := flag.Bool("no-ast", false, "print the CFG but not AST")
+
+    flag.Parse()
+
+    if flag.NArg() < 1 {
         printErrAndDie("please provide a source file to analyze")
     }
-    filename := os.Args[1]
+    filename := flag.Arg(0)
     code, err := os.ReadFile(filename)
     if err != nil {
         printErrAndDie("unable to read file %s: %w", filename, err)
@@ -49,7 +56,11 @@ func main() {
     sourceTree := parse(parser, code)
     defer sourceTree.Close()
 
-    fmt.Println(sourceTree.RootNode().ToSexp())
+    if !*noAST {
+        fmt.Println(sourceTree.RootNode().ToSexp())
+    }
+
+    if *noCFG { return }
 
     fileCFG, err := cfg.NewCFG(sourceTree.RootNode())
     if err != nil {
