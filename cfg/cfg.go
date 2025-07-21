@@ -1,7 +1,7 @@
 package cfg
 
 import (
-    "fmt" 
+    "fmt"
     "strings"
     "strconv"
 
@@ -56,15 +56,15 @@ type CFG struct {
 func (g *CFG) String() string {
     builder := strings.Builder{}
 
-    builder.WriteString("Declarations: ")
+    builder.WriteString("Declarations:")
     for _, decl := range g.Decls {
-        builder.WriteString(decl.Name)
+        builder.WriteString(fmt.Sprintf(" %s", decl.Name))
     }
     builder.WriteString("\n")
 
-    builder.WriteString("Function definitions: ")
+    builder.WriteString("Function definitions:")
     for _, fdef := range g.FuncDefs {
-        builder.WriteString(fdef.String())
+        builder.WriteString(fmt.Sprintf(" %s", fdef.String()))
     }
     builder.WriteString("\n")
 
@@ -102,17 +102,7 @@ func (g *CFG) String() string {
 func visitNode(cfg *CFG, source *Node, dest *Node, cursor *tree_sitter.TreeCursor) error {
     switch cursor.Node().Kind() {
     case "source_file":
-        /*
-        for _, child := range node.Children(node.Walk()) {
-            subdest := NewNode()
-            err := visitNode(cfg, source, subdest, &child)
-            if err != nil {
-                fmt.Println(err.Error())
-            } else {
-                source = subdest
-            }
-        }
-        */
+
         if cursor.GotoFirstChild() {
             newDest := NewNode()
             err := visitNode(cfg, source, newDest, cursor)
@@ -132,7 +122,7 @@ func visitNode(cfg *CFG, source *Node, dest *Node, cursor *tree_sitter.TreeCurso
                 }
             }
         }
-        
+
         // implicit return
         cfg.Graph[source] = append(cfg.Graph[source], Edge{nil, dest})
 
