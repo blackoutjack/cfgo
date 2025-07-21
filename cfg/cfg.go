@@ -99,9 +99,10 @@ func (g *CFG) String() string {
     return builder.String()
 }
 
-func visitNode(cfg *CFG, source *Node, dest *Node, node *tree_sitter.Node) error {
-    switch node.Kind() {
+func visitNode(cfg *CFG, source *Node, dest *Node, cursor *tree_sitter.TreeCursor) error {
+    switch cursor.Node().Kind() {
     case "source_file":
+        /*
         for _, child := range node.Children(node.Walk()) {
             subdest := NewNode()
             err := visitNode(cfg, source, subdest, &child)
@@ -111,37 +112,36 @@ func visitNode(cfg *CFG, source *Node, dest *Node, node *tree_sitter.Node) error
                 source = subdest
             }
         }
-        /*
+        */
         if cursor.GotoFirstChild() {
             newDest := NewNode()
-            err := visitNode(cfg, source, &newDest, cursor)
+            err := visitNode(cfg, source, newDest, cursor)
             if err != nil {
                 fmt.Println(err.Error())
             } else {
-                source = &newDest
+                source = newDest
             }
 
             for cursor.GotoNextSibling() {
                 newDest := NewNode()
-                err = visitNode(cfg, source, &newDest, cursor)
+                err = visitNode(cfg, source, newDest, cursor)
                 if err != nil {
                     fmt.Println(err.Error())
                 } else {
-                    source = &newDest
+                    source = newDest
                 }
             }
         }
-        */
         
         // implicit return
         cfg.Graph[source] = append(cfg.Graph[source], Edge{nil, dest})
 
     case "package_clause":
-        cfg.Graph[source] = append(cfg.Graph[source], Edge{node, dest})
+        cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
     case "import_declaration":
-        return fmt.Errorf("unsupported AST node: %s", node.Kind())
+        return fmt.Errorf("unsupported AST node: %s", cursor.Node().Kind())
     default:
-        return fmt.Errorf("unsupported AST node: %s", node.Kind())
+        return fmt.Errorf("unsupported AST node: %s", cursor.Node().Kind())
     }
     return nil
 }
@@ -161,7 +161,7 @@ func NewCFG(ast *tree_sitter.Node) (*CFG, error) {
         Graph: graph,
     }
 
-    err := visitNode(&cfg, entryNode, exitNode, ast)
+    err := visitNode(&cfg, entryNode, exitNode, ast.Walk())
 
     return &cfg, err
 }
