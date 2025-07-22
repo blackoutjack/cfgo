@@ -116,6 +116,32 @@ func (g *CFG) String() string {
     return builder.String()
 }
 
+func printASTChildren(code []byte, cursor *tree_sitter.TreeCursor) {
+    fmt.Printf("Children of %s: %s\n", cursor.Node().Kind(),
+        cursor.Node().Utf8Text(code))
+    i := 0
+    if cursor.GotoFirstChild() {
+        defer cursor.GotoParent()
+
+        name := cursor.FieldName()
+        if len(name) > 0 {
+            name = fmt.Sprintf("/%s", name)
+        }
+        fmt.Printf("%d%s %s: %s\n", i, name, cursor.Node().Kind(),
+            cursor.Node().Utf8Text(code))
+
+        for cursor.GotoNextSibling() {
+            i += 1
+            name := cursor.FieldName()
+            if len(name) > 0 {
+                name = fmt.Sprintf("/%s", name)
+            }
+            fmt.Printf("%d%s %s: %s\n", i, name, cursor.Node().Kind(),
+                cursor.Node().Utf8Text(code))
+        }
+    }
+}
+
 func extractImportNameFromPath(
     code []byte,
     cursor *tree_sitter.TreeCursor) (string, error) {
@@ -192,7 +218,8 @@ func visitImportSpec(
     return fmt.Errorf("unable to determine declaration from import_spec")
 }
 
-func visitImportSpecList(cfg *CFG,
+func visitImportSpecList(
+    cfg *CFG,
     code []byte,
     source *Node,
     dest *Node,
@@ -236,7 +263,8 @@ func visitImportSpecList(cfg *CFG,
     return cumulErr
 }
 
-func visitImportDeclaration(cfg *CFG,
+func visitImportDeclaration(
+    cfg *CFG,
     code []byte,
     source *Node,
     dest *Node,
@@ -264,7 +292,126 @@ func visitImportDeclaration(cfg *CFG,
     }
 }
 
-func visitNode(cfg *CFG,
+func visitVarSpec(
+    cfg *CFG,
+    code []byte,
+    cursor *tree_sitter.TreeCursor) error {
+
+    var cumulErr error = nil
+    for _, nameNode := range cursor.Node().ChildrenByFieldName(
+        "name", cursor.Node().Walk()) {
+        
+        if nameNode.Kind() != "identifier" {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "var_spec name node is not an indentifier"))
+            continue
+        }
+        varName := nameNode.Utf8Text(code)
+        cfg.Decls = append(cfg.Decls, Decl{varName})
+    }
+
+    typeNode := cursor.Node().ChildByFieldName("type")
+    if typeNode != nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "type_identifier not yet supported"))
+    }
+
+    valueNode := cursor.Node().ChildByFieldName("value")
+    if valueNode != nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "var_spec value not yet supported"))
+    }
+
+    return cumulErr
+}
+
+func visitVarDeclaration(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor) error {
+
+    cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
+
+    //printASTChildren(code, cursor)
+    if !cursor.GotoFirstChild() {
+        return fmt.Errorf("no children for var declaration")
+    }
+    defer cursor.GotoParent()
+    
+    if cursor.Node().Kind() != "var" {
+        return fmt.Errorf("unexpected first child for var declaration: %s", cursor.Node().Kind())
+    }
+
+    if !cursor.GotoNextSibling() || cursor.Node().Kind() != "var_spec" {
+        return fmt.Errorf("no var_spec for var_declaration")
+    }
+
+    return visitVarSpec(cfg, code, cursor)
+}
+
+func visitConstSpec(
+    cfg *CFG,
+    code []byte,
+    cursor *tree_sitter.TreeCursor) error {
+
+    var cumulErr error = nil
+    for _, nameNode := range cursor.Node().ChildrenByFieldName(
+        "name", cursor.Node().Walk()) {
+        
+        if nameNode.Kind() != "identifier" {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "const_spec name node is not an indentifier"))
+            continue
+        }
+        constName := nameNode.Utf8Text(code)
+        cfg.Decls = append(cfg.Decls, Decl{constName})
+    }
+
+    typeNode := cursor.Node().ChildByFieldName("type")
+    if typeNode != nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "type_identifier not yet supported"))
+    }
+
+    valueNode := cursor.Node().ChildByFieldName("value")
+    if valueNode != nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "const_spec value not yet supported"))
+    }
+
+    return cumulErr
+}
+
+func visitConstDeclaration(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor) error {
+
+    cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
+
+    if !cursor.GotoFirstChild() {
+        return fmt.Errorf("no children for const declaration")
+    }
+    defer cursor.GotoParent()
+    
+    if cursor.Node().Kind() != "const" {
+        return fmt.Errorf("unexpected first child for const declaration: %s",
+            cursor.Node().Kind())
+    }
+
+    if !cursor.GotoNextSibling() || cursor.Node().Kind() != "const_spec" {
+        return fmt.Errorf("no const_spec for const_declaration")
+    }
+
+    return visitConstSpec(cfg, code, cursor)
+}
+
+func visitNode(
+    cfg *CFG,
     code []byte,
     source *Node,
     dest *Node,
@@ -303,6 +450,18 @@ func visitNode(cfg *CFG,
         err := visitImportDeclaration(cfg, code, source, dest, cursor)
         if err != nil {
             return fmt.Errorf("failed to process import_declaration: %w", err)
+        }
+
+    case "var_declaration":
+        err := visitVarDeclaration(cfg, code, source, dest, cursor)
+        if err != nil {
+            return fmt.Errorf("failed to process var_declaration: %w", err)
+        }
+
+    case "const_declaration":
+        err := visitConstDeclaration(cfg, code, source, dest, cursor)
+        if err != nil {
+            return fmt.Errorf("failed to process const_declaration: %w", err)
         }
 
     default:

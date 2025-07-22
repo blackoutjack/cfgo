@@ -92,16 +92,30 @@ Graph:
   3 => 1: nil
 """
 
-run_top_level_declaration = ["--no-ast", "test/top-level-declaration.go"]
+run_var_declaration = ["--no-ast", "test/var-declaration.go"]
 
-out_top_level_declaration = """
-Declarations: first second
+out_var_declaration = """
+Declarations: myvar one two inited
 Function definitions:
 Entry: 0
 Exit: 1
 Graph:
   0 => 2: (package_clause (package_identifier))
   2 => 3: (var_declaration (var_spec name: (identifier) type: (type_identifier)))
-  3 => 4: (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal))))
-  4 => 1: nil
+  3 => 4: (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier)))
+  4 => 5: (var_declaration (var_spec name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)))))
+  5 => 1: nil
+"""
+
+run_const_declaration = ["--no-ast", "test/const-declaration.go"]
+
+out_const_declaration = """
+Declarations: myconst
+Function definitions:
+Entry: 0
+Exit: 1
+Graph:
+  0 => 2: (package_clause (package_identifier))
+  2 => 3: (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal))))
+  3 => 1: nil
 """
