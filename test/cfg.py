@@ -29,7 +29,7 @@ Graph:
 run_import_basic = ["--no-ast", "test/import-basic.go"]
 
 out_import_basic = """
-Declarations: package
+Declarations: package:module
 Function definitions:
 Entry: 0
 Exit: 1
@@ -42,7 +42,7 @@ Graph:
 run_import_splat = ["--no-ast", "test/import-splat.go"]
 
 out_import_splat = """
-Declarations: package.*
+Declarations: package.*:any
 Function definitions:
 Entry: 0
 Exit: 1
@@ -55,7 +55,7 @@ Graph:
 run_import_named = ["--no-ast", "test/import-named.go"]
 
 out_import_named = """
-Declarations: myname
+Declarations: myname:module
 Function definitions:
 Entry: 0
 Exit: 1
@@ -68,7 +68,7 @@ Graph:
 run_import_block = ["--no-ast", "test/import-block.go"]
 
 out_import_block = """
-Declarations: myname pkg
+Declarations: myname:module pkg:module
 Function definitions:
 Entry: 0
 Exit: 1
@@ -95,7 +95,7 @@ Graph:
 run_var_declaration = ["--no-ast", "test/var-declaration.go"]
 
 out_var_declaration = """
-Declarations: myvar one two inited implType
+Declarations: myvar:string one:int two:int inited:string implType:int a:string b:int c:string d:string
 Function definitions:
 Entry: 0
 Exit: 1
@@ -105,13 +105,15 @@ Graph:
   3 => 4: (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier)))
   4 => 5: (var_declaration (var_spec name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)))))
   5 => 6: (var_declaration (var_spec name: (identifier) value: (expression_list (int_literal))))
-  6 => 1: nil
+  6 => 7: (var_declaration (var_spec name: (identifier) name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (int_literal))))
+  7 => 8: (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (interpreted_string_literal (interpreted_string_literal_content)))))
+  8 => 1: nil
 """
 
 run_const_declaration = ["--no-ast", "test/const-declaration.go"]
 
 out_const_declaration = """
-Declarations: myconst implicitType
+Declarations: myconst:int implicitType:string constA:string constB:int constC:string constD:string
 Function definitions:
 Entry: 0
 Exit: 1
@@ -119,5 +121,7 @@ Graph:
   0 => 2: (package_clause (package_identifier))
   2 => 3: (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal))))
   3 => 4: (const_declaration (const_spec name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)))))
-  4 => 1: nil
+  4 => 5: (const_declaration (const_spec name: (identifier) name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (int_literal))))
+  5 => 6: (const_declaration (const_spec name: (identifier) name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (interpreted_string_literal (interpreted_string_literal_content)))))
+  6 => 1: nil
 """

@@ -48,11 +48,11 @@ out_import_blank = """
 run_var_declaration = ["--no-cfg", "test/var-declaration.go"]
 
 out_var_declaration = """
-(source_file (package_clause (package_identifier)) (var_declaration (var_spec name: (identifier) type: (type_identifier))) (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier))) (var_declaration (var_spec name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content))))))
+(source_file (package_clause (package_identifier)) (var_declaration (var_spec name: (identifier) type: (type_identifier))) (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier))) (var_declaration (var_spec name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content))))) (var_declaration (var_spec name: (identifier) value: (expression_list (int_literal)))) (var_declaration (var_spec name: (identifier) name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (int_literal)))) (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (interpreted_string_literal (interpreted_string_literal_content))))))
 """
 
 run_const_declaration = ["--no-cfg", "test/const-declaration.go"]
 
 out_const_declaration = """
-(source_file (package_clause (package_identifier)) (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal)))))
+(source_file (package_clause (package_identifier)) (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal)))) (const_declaration (const_spec name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content))))) (const_declaration (const_spec name: (identifier) name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (int_literal)))) (const_declaration (const_spec name: (identifier) name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (interpreted_string_literal (interpreted_string_literal_content))))))
 """

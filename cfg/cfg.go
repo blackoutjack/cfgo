@@ -44,6 +44,7 @@ type Graph map[*Node][]Edge
 
 type Decl struct {
     Name string
+    Type string
 }
 
 type FuncDef struct {
@@ -70,7 +71,7 @@ func (g *CFG) String() string {
 
     builder.WriteString("Declarations:")
     for _, decl := range g.Decls {
-        builder.WriteString(fmt.Sprintf(" %s", decl.Name))
+        builder.WriteString(fmt.Sprintf(" %s:%s", decl.Name, decl.Type))
     }
     builder.WriteString("\n")
 
@@ -180,7 +181,7 @@ func visitImportSpec(
             if !cursor.GotoFirstChild() {
                 importName := cursor.Node().Utf8Text(code)
                 if importName != "_" {
-                    cfg.Decls = append(cfg.Decls, Decl{importName})
+                    cfg.Decls = append(cfg.Decls, Decl{importName, "module"})
                 }
                 return nil
             }
@@ -202,8 +203,10 @@ func visitImportSpec(
             }
             if isSplat {
                 importName = fmt.Sprintf("%s.*", importName)
+                cfg.Decls = append(cfg.Decls, Decl{importName, "any"})
+            } else {
+                cfg.Decls = append(cfg.Decls, Decl{importName, "module"})
             }
-            cfg.Decls = append(cfg.Decls, Decl{importName})
             return nil
         default:
             // skip over parens, other cruft
@@ -292,34 +295,117 @@ func visitImportDeclaration(
     }
 }
 
+func extractTypeFromExpression(
+    cursor *tree_sitter.TreeCursor) (string, error) {
+
+    switch cursor.Node().Kind() {
+    case "int_literal":
+        return "int", nil
+    case "interpreted_string_literal":
+        return "string", nil
+    default:
+        return "<unknown>", fmt.Errorf("unsupported expression type: %s", cursor.Node().Kind())
+    }
+}
+
+func extractTypesFromExpressionList(
+    code []byte,
+    cursor *tree_sitter.TreeCursor) ([]string, error) {
+
+    typeList := []string{}
+
+    if !cursor.GotoFirstChild() {
+        return []string{}, fmt.Errorf("expression_list has no children")
+    }
+    defer cursor.GotoParent()
+
+    var cumulErr error = nil
+
+    typeName, err := extractTypeFromExpression(cursor)
+    if err != nil {
+        typeName = "<unknown>"
+        cumulErr = log.CombineErrors(cumulErr, err)
+    }
+    typeList = append(typeList, typeName)
+
+    for cursor.GotoNextSibling() {
+        if cursor.Node().Kind() == "," {
+            continue
+        }
+        typeName, err := extractTypeFromExpression(cursor)
+        if err != nil {
+            typeName = "<unknown>"
+            cumulErr = log.CombineErrors(cumulErr, err)
+        }
+        typeList = append(typeList, typeName)
+    }
+
+    return typeList, cumulErr
+}
+
 func visitVarSpec(
     cfg *CFG,
     code []byte,
     cursor *tree_sitter.TreeCursor) error {
 
     var cumulErr error = nil
+    names := []string{}
     for _, nameNode := range cursor.Node().ChildrenByFieldName(
         "name", cursor.Node().Walk()) {
         
         if nameNode.Kind() != "identifier" {
             cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
-                "var_spec name node is not an indentifier"))
+                "expected var_spec name to be an identifier, got %s",
+                nameNode.Kind()))
             continue
         }
         varName := nameNode.Utf8Text(code)
-        cfg.Decls = append(cfg.Decls, Decl{varName})
+        names = append(names, varName)
     }
 
+    explicitTypeName := ""
     typeNode := cursor.Node().ChildByFieldName("type")
     if typeNode != nil {
-        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
-            "type_identifier not yet supported"))
+        explicitTypeName = typeNode.Utf8Text(code)
     }
 
     valueNode := cursor.Node().ChildByFieldName("value")
+    var valueTypeNames []string = nil
     if valueNode != nil {
-        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
-            "var_spec value not yet supported"))
+        var err error = nil
+        valueTypeNames, err = extractTypesFromExpressionList(code, valueNode.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "failed to determine types from var_spec value expressions"))
+        } else {
+            // sanity checks
+            if len(valueTypeNames) != len(names) {
+                cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                    "%d types extracted from const_spec value " +
+                    "expressions does not match %d declared names",
+                    len(valueTypeNames), len(names)))
+            } else if explicitTypeName != "" {
+                for _, valueType := range valueTypeNames {
+                    if valueType != explicitTypeName {
+                        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                            "explicit type '%s' and inferred value type '%s' do not match", 
+                            explicitTypeName, valueType))
+                    }
+                }
+            }
+        }
+    }
+
+    for i, declName := range names {
+        typeName := ""
+        if explicitTypeName != "" {
+            typeName = explicitTypeName
+        } else if valueTypeNames != nil && i < len(valueTypeNames) {
+            typeName = valueTypeNames[i]
+        } else {
+            typeName = "<unknown>"
+        }
+        cfg.Decls = append(cfg.Decls, Decl{declName, typeName})
     }
 
     return cumulErr
@@ -334,7 +420,6 @@ func visitVarDeclaration(
 
     cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
 
-    //printASTChildren(code, cursor)
     if !cursor.GotoFirstChild() {
         return fmt.Errorf("no children for var declaration")
     }
@@ -357,28 +442,70 @@ func visitConstSpec(
     cursor *tree_sitter.TreeCursor) error {
 
     var cumulErr error = nil
+    names := []string{}
     for _, nameNode := range cursor.Node().ChildrenByFieldName(
         "name", cursor.Node().Walk()) {
+
+        if nameNode.Kind() == "," {
+            continue
+        }
         
         if nameNode.Kind() != "identifier" {
             cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
-                "const_spec name node is not an indentifier"))
+                "expected const_spec name to be an identifier, got %s",
+                nameNode.Kind()))
             continue
         }
         constName := nameNode.Utf8Text(code)
-        cfg.Decls = append(cfg.Decls, Decl{constName})
+        names = append(names, constName)
     }
 
+    explicitTypeName := ""
     typeNode := cursor.Node().ChildByFieldName("type")
     if typeNode != nil {
-        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
-            "type_identifier not yet supported"))
+        explicitTypeName = typeNode.Utf8Text(code)
     }
 
     valueNode := cursor.Node().ChildByFieldName("value")
+    var valueTypeNames []string = nil
     if valueNode != nil {
+        var err error = nil
+        valueTypeNames, err = extractTypesFromExpressionList(code, valueNode.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "failed to determine types from const_spec value expressions: %w", err))
+        } else {
+            // sanity checks
+            if len(valueTypeNames) != len(names) {
+                cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                    "%d types extracted from const_spec value " +
+                    "expressions does not match %d declared names",
+                    len(valueTypeNames), len(names)))
+            } else if explicitTypeName != "" {
+                for _, valueType := range valueTypeNames {
+                    if valueType != explicitTypeName {
+                        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                            "explicit type '%s' and inferred value type '%s' do not match", 
+                            explicitTypeName, valueType))
+                    }
+                }
+            }
+        }
+    } else {
         cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
-            "const_spec value not yet supported"))
+            "const_spec has no value expression"))
+    }
+
+    for i, declName := range names {
+        typeName := ""
+        if explicitTypeName != "" {
+            typeName = explicitTypeName
+        } else if valueTypeNames != nil && i < len(valueTypeNames) {
+            typeName = valueTypeNames[i]
+        } else {
+            typeName = "<unknown>"
+        }
+        cfg.Decls = append(cfg.Decls, Decl{declName, typeName})
     }
 
     return cumulErr
