@@ -44,3 +44,9 @@ run_import_blank = ["--no-cfg", "test/import-blank.go"]
 out_import_blank = """
 (source_file (package_clause (package_identifier)) (import_declaration (import_spec name: (blank_identifier) path: (interpreted_string_literal (interpreted_string_literal_content)))))
 """
+
+run_top_level_declaration = ["--no-cfg", "test/top-level-declaration.go"]
+
+out_top_level_declaration = """
+(source_file (package_clause (package_identifier)) (var_declaration (var_spec name: (identifier) type: (type_identifier))) (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal)))))
+"""

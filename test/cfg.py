@@ -91,3 +91,17 @@ Graph:
   2 => 3: (import_spec name: (blank_identifier) path: (interpreted_string_literal (interpreted_string_literal_content)))
   3 => 1: nil
 """
+
+run_top_level_declaration = ["--no-ast", "test/top-level-declaration.go"]
+
+out_top_level_declaration = """
+Declarations: first second
+Function definitions:
+Entry: 0
+Exit: 1
+Graph:
+  0 => 2: (package_clause (package_identifier))
+  2 => 3: (var_declaration (var_spec name: (identifier) type: (type_identifier)))
+  3 => 4: (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal))))
+  4 => 1: nil
+"""
