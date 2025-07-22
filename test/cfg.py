@@ -95,7 +95,7 @@ Graph:
 run_var_declaration = ["--no-ast", "test/var-declaration.go"]
 
 out_var_declaration = """
-Declarations: myvar one two inited
+Declarations: myvar one two inited implType
 Function definitions:
 Entry: 0
 Exit: 1
@@ -104,18 +104,20 @@ Graph:
   2 => 3: (var_declaration (var_spec name: (identifier) type: (type_identifier)))
   3 => 4: (var_declaration (var_spec name: (identifier) name: (identifier) type: (type_identifier)))
   4 => 5: (var_declaration (var_spec name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)))))
-  5 => 1: nil
+  5 => 6: (var_declaration (var_spec name: (identifier) value: (expression_list (int_literal))))
+  6 => 1: nil
 """
 
 run_const_declaration = ["--no-ast", "test/const-declaration.go"]
 
 out_const_declaration = """
-Declarations: myconst
+Declarations: myconst implicitType
 Function definitions:
 Entry: 0
 Exit: 1
 Graph:
   0 => 2: (package_clause (package_identifier))
   2 => 3: (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal))))
-  3 => 1: nil
+  3 => 4: (const_declaration (const_spec name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)))))
+  4 => 1: nil
 """
