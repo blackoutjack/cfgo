@@ -1,7 +1,7 @@
 # Golze
 
-Golze is a dataflow engine for Go (currently in the proof-of-concept phase),
-written in Go with the
+Golze is a dataflow engine for Go (currently in a CFG-only proof-of-concept
+phase), written in Go with the
 [go-tree-sitter](https://github.com/tree-sitter/go-tree-sitter)
 interface to the parse tree provided by the
 [tree-sitter-go](https://github.com/tree-sitter/tree-sitter-go)
@@ -28,5 +28,8 @@ python -m test
 This is a work in progress. Only the following node kinds are supported.
 - package declarations
 - import declarations (all formats)
+- var declarations
+- const declarations
+- function declarations
 
 Stay tuned for more.
