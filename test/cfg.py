@@ -125,3 +125,56 @@ Graph:
   5 => 6: (const_declaration (const_spec name: (identifier) name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (interpreted_string_literal (interpreted_string_literal_content)))))
   6 => 1: nil
 """
+
+run_func_declaration_basic = ["--no-ast", "test/func-declaration-basic.go"]
+
+out_func_declaration_basic = """
+Declarations: main:func()
+Function definitions: main
+Entry: 0
+Exit: 1
+Graph:
+  0 => 2: (package_clause (package_identifier))
+  2 => 3: (function_declaration name: (identifier) parameters: (parameter_list) body: (block))
+  3 => 1: nil
+"""
+
+run_func_declaration_generic = ["--no-ast", "test/func-declaration-generic.go"]
+
+out_func_declaration_generic = """
+Declarations: generic:func[E<any,F<~string](E,F)(F,E)
+Function definitions: generic
+Entry: 0
+Exit: 1
+Graph:
+  0 => 2: (package_clause (package_identifier))
+  2 => 3: (function_declaration name: (identifier) type_parameters: (type_parameter_list (type_parameter_declaration name: (identifier) type: (type_constraint (type_identifier))) (type_parameter_declaration name: (identifier) type: (type_constraint (negated_type (type_identifier))))) parameters: (parameter_list (parameter_declaration name: (identifier) type: (type_identifier)) (parameter_declaration name: (identifier) type: (type_identifier))) result: (parameter_list (parameter_declaration type: (type_identifier)) (parameter_declaration type: (type_identifier))) body: (block (return_statement (expression_list (identifier) (identifier)))))
+  3 => 1: nil
+"""
+
+run_func_declaration_params = ["--no-ast", "test/func-declaration-params.go"]
+
+out_func_declaration_params = """
+Declarations: withParams:func(string,int,int)
+Function definitions: withParams
+Entry: 0
+Exit: 1
+Graph:
+  0 => 2: (package_clause (package_identifier))
+  2 => 3: (function_declaration name: (identifier) parameters: (parameter_list (parameter_declaration name: (identifier) type: (type_identifier)) (parameter_declaration name: (identifier) name: (identifier) type: (type_identifier))) body: (block))
+  3 => 1: nil
+"""
+
+run_func_declaration_result = ["--no-ast", "test/func-declaration-result.go"]
+
+out_func_declaration_result = """
+Declarations: numstring:func()(int,string)
+Function definitions: numstring
+Entry: 0
+Exit: 1
+Graph:
+  0 => 2: (package_clause (package_identifier))
+  2 => 3: (function_declaration name: (identifier) parameters: (parameter_list) result: (parameter_list (parameter_declaration type: (type_identifier)) (parameter_declaration type: (type_identifier))) body: (block (return_statement (expression_list (int_literal) (interpreted_string_literal (interpreted_string_literal_content))))))
+  3 => 1: nil
+"""
+

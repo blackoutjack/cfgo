@@ -49,7 +49,7 @@ type Decl struct {
 
 type FuncDef struct {
     Id *Decl
-    AST *tree_sitter.Node
+    Tree *tree_sitter.Node
 }
 func (fd *FuncDef) String() string {
     if fd == nil { return "nil" }
@@ -117,7 +117,7 @@ func (g *CFG) String() string {
     return builder.String()
 }
 
-func printASTChildren(code []byte, cursor *tree_sitter.TreeCursor) {
+func printNodeWithChildren(code []byte, cursor *tree_sitter.TreeCursor) {
     fmt.Printf("Children of %s: %s\n", cursor.Node().Kind(),
         cursor.Node().Utf8Text(code))
     i := 0
@@ -537,6 +537,223 @@ func visitConstDeclaration(
     return visitConstSpec(cfg, code, cursor)
 }
 
+func extractTypeParameterDeclarationName(
+    code []byte,
+    cursor *tree_sitter.TreeCursor) (string, error) {
+
+    paramText := cursor.Node().Utf8Text(code)
+
+    // %%% shady, just to avoid having spaces in type string representations
+    paramText = strings.Replace(paramText, " ", "<", 1)
+    
+    return paramText, nil
+}
+
+func extractTypeParameterListText(
+    code []byte,
+    cursor *tree_sitter.TreeCursor) (string, error) {
+
+    if cursor.Node().Kind() != "type_parameter_list" {
+        return "", fmt.Errorf("expected type_parameter_list, got %s",
+            cursor.Node().Kind())
+    }
+
+    if !cursor.GotoFirstChild() {
+        return "", fmt.Errorf("no children for type_parameter_list")
+    }
+    defer cursor.GotoParent()
+
+    typeParamBuf := strings.Builder{}
+    var cumulErr error = nil
+
+    if cursor.Node().Kind() != "[" {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "expected opening bracket in type_parameter_list, got %s",
+            cursor.Node().Kind()))
+    }
+
+    typeParamBuf.WriteString("[")
+
+    if cursor.Node().Kind() == "type_parameter_declaration" {
+        tpdName, err := extractTypeParameterDeclarationName(code, cursor)
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "failed to extract type parameter declaration name: %w", err))
+            typeParamBuf.WriteString("<error>")
+        } else {
+            typeParamBuf.WriteString(tpdName)
+        }
+    }
+
+    for cursor.GotoNextSibling() {
+        if cursor.Node().Kind() == "," {
+            typeParamBuf.WriteString(",")
+        } else if cursor.Node().Kind() == "]" {
+            typeParamBuf.WriteString("]")
+        } else if cursor.Node().Kind() == "type_parameter_declaration" {
+            tpdName, err := extractTypeParameterDeclarationName(code, cursor)
+            if err != nil {
+                cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                    "failed to extract type parameter declaration name: %w", err))
+                typeParamBuf.WriteString("<error>")
+            } else {
+                typeParamBuf.WriteString(tpdName)
+            }
+        } else {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "expected type_parameter_declaration, got %s",
+                cursor.Node().Kind()))
+            typeParamBuf.WriteString("<error>")
+        }
+    }
+
+    return typeParamBuf.String(), cumulErr
+}
+
+func extractParameterDeclarationTypeName(
+    code []byte,
+    cursor *tree_sitter.TreeCursor) (string, error) {
+
+    if cursor.Node().Kind() != "parameter_declaration" {
+        return "", fmt.Errorf("expected parameter_declaration, got %s",
+            cursor.Node().Kind())
+    }
+
+    nameNodes := cursor.Node().ChildrenByFieldName("name", cursor.Copy())
+    numParams := len(nameNodes)
+
+    typeNode := cursor.Node().ChildByFieldName("type")
+    if typeNode == nil {
+        return "<error>", fmt.Errorf("parameter_declaration has no type")
+    }
+    typeText := typeNode.Utf8Text(code)
+    totalTypeText := typeText
+
+    for i := 1; i<numParams; i++ {
+        totalTypeText += "," + typeText
+    }
+
+    return totalTypeText, nil
+}
+
+func extractParameterListText(
+    code []byte,
+    cursor *tree_sitter.TreeCursor) (string, error) {
+
+    if cursor.Node().Kind() != "parameter_list" {
+        return "", fmt.Errorf("expected parameter_list, got %s",
+            cursor.Node().Kind())
+    }
+
+    if !cursor.GotoFirstChild() {
+        return "", fmt.Errorf("no children for parameter_list")
+    }
+    defer cursor.GotoParent()
+
+    paramBuf := strings.Builder{}
+
+    var cumulErr error = nil
+
+    if cursor.Node().Kind() != "(" {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "expected opening paren in parameters, got %s",
+            cursor.Node().Kind()))
+    }
+
+    paramBuf.WriteString("(")
+
+    for cursor.GotoNextSibling() {
+        if cursor.Node().Kind() == "," {
+            paramBuf.WriteString(",")
+        } else if cursor.Node().Kind() == ")" {
+            break
+        } else if cursor.Node().Kind() == "parameter_declaration" {
+            tpdName, err := extractParameterDeclarationTypeName(code, cursor)
+            if err != nil {
+                cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                    "failed to extract parameter declaration name: %w", err))
+                paramBuf.WriteString("<error>")
+            } else {
+                paramBuf.WriteString(tpdName)
+            }
+        } else {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "expected parameter_declaration, got %s",
+                cursor.Node().Kind()))
+            paramBuf.WriteString("<error>")
+        }
+    }
+
+    if cursor.GotoNextSibling() {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "unexpected additional child in parameter_list: %s",
+            cursor.Node().Kind()))
+    }
+
+    paramBuf.WriteString(")")
+
+    return paramBuf.String(), cumulErr
+}
+
+func visitFunctionDeclaration(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor) error {
+
+    cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
+
+    var cumulErr error = nil
+
+    funcName := ""
+    nameNode := cursor.Node().ChildByFieldName("name")
+    if nameNode == nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "no name for function declaration"))
+    } else {
+        funcName = nameNode.Utf8Text(code)
+    }
+
+    funcTypeBuf := strings.Builder{}
+    funcTypeBuf.WriteString("func")
+
+    typeParamNode := cursor.Node().ChildByFieldName("type_parameters")
+    if typeParamNode != nil {
+        typeParamText, err := extractTypeParameterListText(code, typeParamNode.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, err)
+        }
+        funcTypeBuf.WriteString(typeParamText)
+    }
+
+    paramNode := cursor.Node().ChildByFieldName("parameters")
+    if paramNode == nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "no parameter list for function declaration"))
+    } else {
+        paramText, err := extractParameterListText(code, paramNode.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, err)
+        }
+        funcTypeBuf.WriteString(paramText)
+    }
+
+    resultNode := cursor.Node().ChildByFieldName("result")
+    if resultNode != nil {
+        resultText, err := extractParameterListText(code, resultNode.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, err)
+        }
+        funcTypeBuf.WriteString(resultText)
+    }
+
+    cfg.Decls = append(cfg.Decls, Decl{funcName, funcTypeBuf.String()})
+    cfg.FuncDefs = append(cfg.FuncDefs, FuncDef{&cfg.Decls[len(cfg.Decls)-1], cursor.Node()})
+
+    return cumulErr
+}
+
 func visitNode(
     cfg *CFG,
     code []byte,
@@ -589,6 +806,12 @@ func visitNode(
         err := visitConstDeclaration(cfg, code, source, dest, cursor)
         if err != nil {
             return fmt.Errorf("failed to process const_declaration: %w", err)
+        }
+
+    case "function_declaration":
+        err := visitFunctionDeclaration(cfg, code, source, dest, cursor)
+        if err != nil {
+            return fmt.Errorf("failed to process func_declaration: %w", err)
         }
 
     default:

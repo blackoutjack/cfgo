@@ -28,8 +28,8 @@ func getParser() *tree_sitter.Parser {
 func main() {
 
     noCFG := flag.Bool("no-cfg", false,
-        "print the AST but do not generate CFGs")
-    noAST := flag.Bool("no-ast", false, "print the CFG but not AST")
+        "print the parse tree but do not generate CFGs")
+    noAST := flag.Bool("no-ast", false, "print the CFG but not the parse tree")
 
     flag.Parse()
 
@@ -63,7 +63,7 @@ func main() {
     funcsToDo := []cfg.FuncDef{}
     funcsToDo = append(funcsToDo, fileCFG.FuncDefs...)
     for _, funcDef := range funcsToDo {
-        funcCFG, err := cfg.NewCFG(funcDef.AST, code)
+        funcCFG, err := cfg.NewCFG(funcDef.Tree, code)
         if err != nil {
             funcName := "<anonymous>"
             if funcDef.Id != nil {

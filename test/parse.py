@@ -56,3 +56,29 @@ run_const_declaration = ["--no-cfg", "test/const-declaration.go"]
 out_const_declaration = """
 (source_file (package_clause (package_identifier)) (const_declaration (const_spec name: (identifier) type: (type_identifier) value: (expression_list (int_literal)))) (const_declaration (const_spec name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content))))) (const_declaration (const_spec name: (identifier) name: (identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (int_literal)))) (const_declaration (const_spec name: (identifier) name: (identifier) type: (type_identifier) value: (expression_list (interpreted_string_literal (interpreted_string_literal_content)) (interpreted_string_literal (interpreted_string_literal_content))))))
 """
+
+run_func_declaration_basic = ["--no-cfg", "test/func-declaration-basic.go"]
+
+out_func_declaration_basic = """
+(source_file (package_clause (package_identifier)) (function_declaration name: (identifier) parameters: (parameter_list) body: (block)))
+"""
+
+run_func_declaration_generic = ["--no-cfg", "test/func-declaration-generic.go"]
+
+out_func_declaration_generic = """
+(source_file (package_clause (package_identifier)) (function_declaration name: (identifier) type_parameters: (type_parameter_list (type_parameter_declaration name: (identifier) type: (type_constraint (type_identifier))) (type_parameter_declaration name: (identifier) type: (type_constraint (negated_type (type_identifier))))) parameters: (parameter_list (parameter_declaration name: (identifier) type: (type_identifier)) (parameter_declaration name: (identifier) type: (type_identifier))) result: (parameter_list (parameter_declaration type: (type_identifier)) (parameter_declaration type: (type_identifier))) body: (block (return_statement (expression_list (identifier) (identifier))))))
+"""
+
+
+run_func_declaration_params = ["--no-cfg", "test/func-declaration-params.go"]
+
+out_func_declaration_params = """
+(source_file (package_clause (package_identifier)) (function_declaration name: (identifier) parameters: (parameter_list (parameter_declaration name: (identifier) type: (type_identifier)) (parameter_declaration name: (identifier) name: (identifier) type: (type_identifier))) body: (block)))
+"""
+
+run_func_declaration_result = ["--no-cfg", "test/func-declaration-result.go"]
+
+out_func_declaration_result = """
+(source_file (package_clause (package_identifier)) (function_declaration name: (identifier) parameters: (parameter_list) result: (parameter_list (parameter_declaration type: (type_identifier)) (parameter_declaration type: (type_identifier))) body: (block (return_statement (expression_list (int_literal) (interpreted_string_literal (interpreted_string_literal_content)))))))
+"""
+
