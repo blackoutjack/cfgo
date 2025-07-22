@@ -48,7 +48,7 @@ func main() {
     defer sourceTree.Close()
 
     if !*noAST {
-        fmt.Println(sourceTree.RootNode().ToSexp())
+        log.PrintFullTree(code, sourceTree.RootNode().Walk(), false)
     }
 
     if *noCFG { return }
