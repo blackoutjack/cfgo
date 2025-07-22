@@ -9,21 +9,12 @@ import (
     tree_sitter_go "github.com/tree-sitter/tree-sitter-go/bindings/go"
 
     "golze/cfg"
+    log "golze/util"
 )
-
-func printErr(msg string, args... any) {
-    err := fmt.Errorf(msg, args...)
-    fmt.Println(err.Error())
-}
-
-func printErrAndDie(msg string, args... any) {
-    printErr(msg, args...)
-    os.Exit(1)
-}
 
 func parse(parser *tree_sitter.Parser, code []byte) *tree_sitter.Tree {
 
-    tree := parser.Parse([]byte(code), nil)
+    tree := parser.Parse(code, nil)
 
     return tree
 }
@@ -36,23 +27,23 @@ func getParser() *tree_sitter.Parser {
 
 func main() {
 
-    noCFG := flag.Bool("no-cfg", false, "print the AST but do not generate CFGs")
+    noCFG := flag.Bool("no-cfg", false,
+        "print the AST but do not generate CFGs")
     noAST := flag.Bool("no-ast", false, "print the CFG but not AST")
 
     flag.Parse()
 
     if flag.NArg() < 1 {
-        printErrAndDie("please provide a source file to analyze")
+        log.PrintErrAndDie("please provide a source file to analyze")
     }
     filename := flag.Arg(0)
     code, err := os.ReadFile(filename)
     if err != nil {
-        printErrAndDie("unable to read file %s: %w", filename, err)
+        log.PrintErrAndDie("unable to read file %s: %w", filename, err)
     }
 
     parser := getParser()
 
-    //parse("package test\n\nimport \"fmt\"\n\nfunc main() { fmt.Println(\"HELLO\") }")
     sourceTree := parse(parser, code)
     defer sourceTree.Close()
 
@@ -62,9 +53,9 @@ func main() {
 
     if *noCFG { return }
 
-    fileCFG, err := cfg.NewCFG(sourceTree.RootNode())
+    fileCFG, err := cfg.NewCFG(sourceTree.RootNode(), code)
     if err != nil {
-        printErrAndDie("failed to create CFG: %w", err)
+        log.PrintErrAndDie("failed to create CFG: %w", err)
     }
 
     fnCFGs := []*cfg.CFG{}
@@ -72,14 +63,14 @@ func main() {
     funcsToDo := []cfg.FuncDef{}
     funcsToDo = append(funcsToDo, fileCFG.FuncDefs...)
     for _, funcDef := range funcsToDo {
-        funcCFG, err := cfg.NewCFG(funcDef.AST)
+        funcCFG, err := cfg.NewCFG(funcDef.AST, code)
         if err != nil {
             funcName := "<anonymous>"
             if funcDef.Id != nil {
                 funcName = funcDef.Id.Name
             }
             fnCFGs = append(fnCFGs, funcCFG)
-            printErr("failed to create CFG for function %s", funcName)
+            log.PrintErr("failed to create CFG for function %s", funcName)
             continue
         }
         funcsToDo = append(funcsToDo, funcCFG.FuncDefs...)
