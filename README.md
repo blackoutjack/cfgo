@@ -15,8 +15,8 @@ git clone https://github.com/blackoutjack/golze.git
 cd golze && go build
 
 # Install the test framework
-python -m venv ./.venv/nvgoapi
-. .venv/nvgoapi/bin/activate
+python -m venv ./.venv/golze
+. .venv/golze/bin/activate
 pip install -r requirements.txt
 
 # Run the tests
