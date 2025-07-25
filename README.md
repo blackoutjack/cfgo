@@ -1,22 +1,20 @@
-# Golze
+# CFGo
 
-Golze is a dataflow engine for Go (currently in a CFG-only proof-of-concept
-phase), written in Go with the
-[go-tree-sitter](https://github.com/tree-sitter/go-tree-sitter)
-interface to the parse tree provided by the
-[tree-sitter-go](https://github.com/tree-sitter/tree-sitter-go)
-grammar.
+CFGo is a Control Flow Graph for Go files, currently in the proof-of-concept
+phase.  The CFG is generated directly from the parse tree provided by
+[tree-sitter-go](https://github.com/tree-sitter/tree-sitter-go) rather than
+creating an intermediate AST first.
 
 ## Getting started
 
 ```
 # Clone/build the repo
-git clone https://github.com/blackoutjack/golze.git
-cd golze && go build
+git clone https://github.com/blackoutjack/cfgo.git
+cd cfgo && go build
 
 # Install the test framework
-python -m venv ./.venv/golze
-. .venv/golze/bin/activate
+python -m venv ./.venv/cfgo
+. .venv/cfgo/bin/activate
 pip install -r requirements.txt
 
 # Run the tests

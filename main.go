@@ -8,8 +8,8 @@ import (
     tree_sitter "github.com/tree-sitter/go-tree-sitter"
     tree_sitter_go "github.com/tree-sitter/tree-sitter-go/bindings/go"
 
-    "golze/cfg"
-    log "golze/util"
+    "cfgo/cfg"
+    log "cfgo/util"
 )
 
 func parse(parser *tree_sitter.Parser, code []byte) *tree_sitter.Tree {

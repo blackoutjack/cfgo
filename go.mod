@@ -1,4 +1,4 @@
-module golze
+module cfgo
 
 go 1.24.0
 

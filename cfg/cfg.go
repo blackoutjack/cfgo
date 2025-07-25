@@ -9,7 +9,7 @@ import (
 
     tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
-    log "golze/util"
+    log "cfgo/util"
 )
 
 var nodeIndex uint64 = 0

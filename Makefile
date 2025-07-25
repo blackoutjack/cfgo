@@ -5,7 +5,7 @@ PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 TESTREQ := $(VENV)/.installed
 
-golze: *.go */*.go
+cfgo: *.go */*.go
 	go build
 
 $(PIP):
@@ -15,9 +15,9 @@ $(TESTREQ): $(PIP) requirements.txt
 	$(PIP) install -r requirements.txt
 	touch $(TESTREQ)
 
-test: $(TESTREQ) golze
+test: $(TESTREQ) cfgo
 	$(VENV)/bin/python -m test
 
 clean:
-	rm -rf $(VENV) golze
+	rm -rf $(VENV) cfgo
 
