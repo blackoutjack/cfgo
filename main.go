@@ -55,29 +55,12 @@ func main() {
 
     fileCFG, err := cfg.NewCFG(sourceTree.RootNode(), code)
     if err != nil {
-        log.PrintErrAndDie("failed to create CFG: %w", err)
-    }
-
-    fnCFGs := []*cfg.CFG{}
-
-    funcsToDo := []cfg.FuncDef{}
-    funcsToDo = append(funcsToDo, fileCFG.FuncDefs...)
-    for _, funcDef := range funcsToDo {
-        funcCFG, err := cfg.NewCFG(funcDef.Tree, code)
-        if err != nil {
-            funcName := "<anonymous>"
-            if funcDef.Id != nil {
-                funcName = funcDef.Id.Name
-            }
-            fnCFGs = append(fnCFGs, funcCFG)
-            log.PrintErr("failed to create CFG for function %s", funcName)
-            continue
-        }
-        funcsToDo = append(funcsToDo, funcCFG.FuncDefs...)
+        log.PrintErr("error(s) while creating CFG: %w", err)
     }
 
     fmt.Println(fileCFG)
-    for fnCFG := range fnCFGs {
-        fmt.Println(fnCFG)
+    for _, funcDef := range fileCFG.FuncDefs {
+        fmt.Printf("Function: %s\n", funcDef.ID.Name) 
+        fmt.Println(funcDef.CFG)
     }
 }

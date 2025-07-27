@@ -1,3 +1,8 @@
+/*
+Package cfg
+
+Generate a CFG from a Go tree-sitter parse tree.
+*/
 package cfg
 
 import (
@@ -48,20 +53,21 @@ type Decl struct {
 }
 
 type FuncDef struct {
-    Id *Decl
-    Tree *tree_sitter.Node
+    ID *Decl
+    Body *tree_sitter.Node
+    CFG *CFG
 }
 func (fd *FuncDef) String() string {
     if fd == nil { return "nil" }
-    if fd.Id == nil {
+    if fd.ID == nil {
         return "<anonymous>"
     }
-    return fd.Id.Name
+    return fd.ID.Name
 }
 
 type CFG struct {
     Decls []Decl
-    FuncDefs []FuncDef
+    FuncDefs []*FuncDef
     Entry *Node
     Exit *Node
     Graph Graph
@@ -115,32 +121,6 @@ func (g *CFG) String() string {
     }
 
     return builder.String()
-}
-
-func printNodeWithChildren(code []byte, cursor *tree_sitter.TreeCursor) {
-    fmt.Printf("Children of %s: %s\n", cursor.Node().Kind(),
-        cursor.Node().Utf8Text(code))
-    i := 0
-    if cursor.GotoFirstChild() {
-        defer cursor.GotoParent()
-
-        name := cursor.FieldName()
-        if len(name) > 0 {
-            name = fmt.Sprintf("/%s", name)
-        }
-        fmt.Printf("%d%s %s: %s\n", i, name, cursor.Node().Kind(),
-            cursor.Node().Utf8Text(code))
-
-        for cursor.GotoNextSibling() {
-            i += 1
-            name := cursor.FieldName()
-            if len(name) > 0 {
-                name = fmt.Sprintf("/%s", name)
-            }
-            fmt.Printf("%d%s %s: %s\n", i, name, cursor.Node().Kind(),
-                cursor.Node().Utf8Text(code))
-        }
-    }
 }
 
 func extractImportNameFromPath(
@@ -309,7 +289,6 @@ func extractTypeFromExpression(
 }
 
 func extractTypesFromExpressionList(
-    code []byte,
     cursor *tree_sitter.TreeCursor) ([]string, error) {
 
     typeList := []string{}
@@ -373,7 +352,7 @@ func visitVarSpec(
     var valueTypeNames []string = nil
     if valueNode != nil {
         var err error = nil
-        valueTypeNames, err = extractTypesFromExpressionList(code, valueNode.Walk())
+        valueTypeNames, err = extractTypesFromExpressionList(valueNode.Walk())
         if err != nil {
             cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
                 "failed to determine types from var_spec value expressions"))
@@ -470,7 +449,7 @@ func visitConstSpec(
     var valueTypeNames []string = nil
     if valueNode != nil {
         var err error = nil
-        valueTypeNames, err = extractTypesFromExpressionList(code, valueNode.Walk())
+        valueTypeNames, err = extractTypesFromExpressionList(valueNode.Walk())
         if err != nil {
             cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
                 "failed to determine types from const_spec value expressions: %w", err))
@@ -748,8 +727,129 @@ func visitFunctionDeclaration(
         funcTypeBuf.WriteString(resultText)
     }
 
+    
     cfg.Decls = append(cfg.Decls, Decl{funcName, funcTypeBuf.String()})
-    cfg.FuncDefs = append(cfg.FuncDefs, FuncDef{&cfg.Decls[len(cfg.Decls)-1], cursor.Node()})
+    funcBody := cursor.Node().ChildByFieldName("body")
+    funcDef := FuncDef{&cfg.Decls[len(cfg.Decls)-1], funcBody, nil}
+    cfg.FuncDefs = append(cfg.FuncDefs, &funcDef)
+
+    return cumulErr
+}
+
+func visitBlock(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor) error {
+    
+    count := cursor.Node().ChildCount() - 2
+
+    if !cursor.GotoFirstChild() {
+        return fmt.Errorf("no children for block")
+    }
+    defer cursor.GotoParent()
+
+    var cumulErr error = nil
+
+    if cursor.Node().Kind() == "{" {
+        if !cursor.GotoNextSibling() {
+            return log.CombineErrors(cumulErr, fmt.Errorf(
+                "too few children for block node"))
+        }
+    } else {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "unexpected first child of block node: %s", cursor.Node().Kind()))
+    }
+
+    err := visitStatementList(cfg, code, source, dest, cursor, count)
+    if err != nil {
+        cumulErr = log.CombineErrors(cumulErr, err)
+    }
+
+    if !cursor.GotoNextSibling() || cursor.Node().Kind() != "}" {
+        cumulErr = log.CombineErrors(
+            cumulErr, fmt.Errorf("no closing brace for block"))
+    }
+
+    return cumulErr
+}
+
+func visitFunctionBody(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor) error {
+
+    count := cursor.Node().ChildCount() - 2
+    var cumulErr error = nil
+    var subDest *Node
+    if count < 1 {
+        subDest = source
+    } else {
+        subDest = NewNode()
+        err := visitBlock(cfg, code, source, subDest, cursor)
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "failed to process function body: %w", err))
+        }
+    }
+
+    // implicit return
+    cfg.Graph[subDest] = append(cfg.Graph[subDest], Edge{nil, dest})
+
+    return cumulErr
+}
+
+func visitStatementList(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor,
+    count uint) error {
+
+    if count == 0 { return nil }
+
+    var cumulErr error = nil
+    var childIndex uint = 0
+
+    var subDest *Node
+    if count == 1 {
+        subDest = dest
+    } else {
+        subDest = NewNode()
+    }
+
+    err := visitNode(cfg, code, source, subDest, cursor)
+    if err != nil {
+        cumulErr = log.CombineErrors(cumulErr, err)
+    }
+    source = subDest
+
+    if count == 1 {
+        return cumulErr
+    }
+
+    for cursor.GotoNextSibling() {
+        childIndex += 1
+        if childIndex == count - 1 {
+            subDest = dest
+        } else {
+            subDest = NewNode()
+        }
+            
+        err := visitNode(cfg, code, source, subDest, cursor)
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, err)
+        }
+        if childIndex == count - 1 {
+            break
+        }
+
+        source = subDest
+    }
 
     return cumulErr
 }
@@ -763,30 +863,37 @@ func visitNode(
 
     switch cursor.Node().Kind() {
     case "source_file":
+        
+        var err error = nil
+        count := cursor.Node().ChildCount()
+        subDest := source
 
         if cursor.GotoFirstChild() {
-            newDest := NewNode()
-            err := visitNode(cfg, code, source, newDest, cursor)
-            if err != nil {
-                fmt.Println(err.Error())
-            }
-            source = newDest
+            defer cursor.GotoParent()
 
-            for cursor.GotoNextSibling() {
-                newDest := NewNode()
-                err = visitNode(cfg, code, source, newDest, cursor)
-                if err != nil {
-                    fmt.Println(err.Error())
-                }
-                source = newDest
+            subDest = NewNode()
+            err = visitStatementList(cfg, code, source, subDest, cursor, count)
+            if err != nil {
+                err = fmt.Errorf("failed to process source_file: %w", err)
             }
-            cursor.GotoParent()  // just for good measure
         }
 
         // implicit return
-        cfg.Graph[source] = append(cfg.Graph[source], Edge{nil, dest})
+        cfg.Graph[subDest] = append(cfg.Graph[subDest], Edge{nil, dest})
+
+        return err
+
+    case "block":
+        err := visitBlock(cfg, code, source, dest, cursor)
+        if err != nil {
+            return fmt.Errorf("failed to process block: %w", err)
+        }
 
     case "package_clause":
+        cfg.Graph[source] = append(
+            cfg.Graph[source], Edge{cursor.Node(), dest})
+
+    case "return_statement":
         cfg.Graph[source] = append(
             cfg.Graph[source], Edge{cursor.Node(), dest})
 
@@ -811,10 +918,12 @@ func visitNode(
     case "function_declaration":
         err := visitFunctionDeclaration(cfg, code, source, dest, cursor)
         if err != nil {
-            return fmt.Errorf("failed to process func_declaration: %w", err)
+            return fmt.Errorf(
+                "failed to process function_declaration: %w", err)
         }
 
     default:
+        cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
         return fmt.Errorf("unsupported AST node: %s", cursor.Node().Kind())
 
     }
@@ -828,15 +937,35 @@ func NewCFG(ast *tree_sitter.Node, code []byte) (*CFG, error) {
         entryNode: []Edge{},
     }
 
-    cfg := CFG{
+    mainCfg := CFG{
         Decls: []Decl{},
-        FuncDefs: []FuncDef{},
+        FuncDefs: []*FuncDef{},
         Entry: entryNode,
         Exit: exitNode,
         Graph: graph,
     }
 
-    err := visitNode(&cfg, code, entryNode, exitNode, ast.Walk())
+    cumulErr := visitNode(&mainCfg, code, entryNode, exitNode, ast.Walk())
 
-    return &cfg, err
+    for _, f := range mainCfg.FuncDefs {
+        entryNode = NewNode()
+        exitNode = NewNode()
+        graph = Graph{
+            entryNode: []Edge{},
+        }
+        innerCFG := CFG{
+            Decls: []Decl{},
+            FuncDefs: []*FuncDef{},
+            Entry: entryNode,
+            Exit: exitNode,
+            Graph: graph,
+        }
+        f.CFG = &innerCFG
+        err := visitFunctionBody(f.CFG, code, entryNode, exitNode, f.Body.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, err)
+        }
+    }
+
+    return &mainCfg, cumulErr
 }
