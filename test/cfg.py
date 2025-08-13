@@ -212,3 +212,25 @@ Graph:
   6 => 5: nil
 """
 
+run_short_var_declaration = ["--no-ast", "test/short-var-declaration.go"]
+
+out_short_var_declaration = """
+Declarations: contain:func()
+Function definitions: contain
+Entry: 0
+Exit: 1
+Graph:
+  0 => 3: (package_clause (package_identifier))
+  2 => 1: nil
+  3 => 2: (function_declaration name: (identifier) parameters: (parameter_list) body: (block (short_var_declaration left: (expression_list (identifier)) right: (expression_list (interpreted_string_literal))) (short_var_declaration left: (expression_list (identifier) (identifier)) right: (expression_list (int_literal) (int_literal)))))
+
+Function: contain
+Declarations: myvar:string one:int two:int
+Function definitions:
+Entry: 4
+Exit: 5
+Graph:
+  4 => 7: (short_var_declaration left: (expression_list (identifier)) right: (expression_list (interpreted_string_literal)))
+  6 => 5: nil
+  7 => 6: (short_var_declaration left: (expression_list (identifier) (identifier)) right: (expression_list (int_literal) (int_literal)))
+"""

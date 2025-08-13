@@ -375,3 +375,39 @@ source_file
       }
 """
 
+run_short_var_declaration = ["--no-cfg", "test/short-var-declaration.go"]
+
+out_short_var_declaration = """
+source_file
+  package_clause
+    package
+    package_identifier
+  function_declaration
+    func
+    name:identifier
+    parameters:parameter_list
+      (
+      )
+    body:block
+      {
+      short_var_declaration
+        left:expression_list
+          identifier
+        :=
+        right:expression_list
+          interpreted_string_literal
+            "
+            "
+      short_var_declaration
+        left:expression_list
+          identifier
+          ,
+          identifier
+        :=
+        right:expression_list
+          int_literal
+          ,
+          int_literal
+      }
+"""
+

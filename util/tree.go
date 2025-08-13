@@ -52,3 +52,9 @@ func PrintNodeWithChildren(code []byte, cursor *tree_sitter.TreeCursor) {
     PrintTree(code, cursor, 2, "", true)
 }
 
+func ExpectNodeKind(cursor *tree_sitter.TreeCursor, kind string) (string, error) {
+    if cursor.Node().Kind() != kind {
+        return "", fmt.Errorf("expected %s, got %s", kind, cursor.Node().Kind())
+    }
+    return kind, nil
+}

@@ -390,6 +390,97 @@ func visitVarSpec(
     return cumulErr
 }
 
+func visitShortVarDeclaration(
+    cfg *CFG,
+    code []byte,
+    source *Node,
+    dest *Node,
+    cursor *tree_sitter.TreeCursor) error {
+
+    cfg.Graph[source] = append(cfg.Graph[source], Edge{cursor.Node(), dest})
+
+    kind, err := log.ExpectNodeKind(cursor, "short_var_declaration")
+    if err != nil {
+        return err
+    }
+
+    var cumulErr error = nil
+    names := []string{}
+
+    leftNode := cursor.Node().ChildByFieldName("left");
+    if leftNode == nil {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "%s has no left child", kind))
+        return cumulErr
+    }
+    if leftNode.Kind() != "expression_list" {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "expected %s left child to be an expression_list, got %s",
+            kind, leftNode.Kind()))
+        return cumulErr
+    }
+
+    listCursor := leftNode.Walk()
+    if !listCursor.GotoFirstChild() {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "no children on left side of %s", kind))
+        return cumulErr
+    }
+    defer listCursor.GotoParent()
+
+    for {
+        nameNode := listCursor.Node()
+        if nameNode.Kind() == "identifier" {
+            varName := nameNode.Utf8Text(code)
+            names = append(names, varName)
+        } else if nameNode.Kind() == "," {
+            // keep going
+        } else {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "expected %s target to be an identifier, got %s",
+                kind, nameNode.Kind()))
+        }
+        if !listCursor.GotoNextSibling() {
+            break
+        }
+    }
+
+    rightNode := cursor.Node().ChildByFieldName("right")
+    var valueTypeNames []string = nil
+    if rightNode != nil {
+        var err error = nil
+        valueTypeNames, err = extractTypesFromExpressionList(rightNode.Walk())
+        if err != nil {
+            cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                "failed to determine types from %s value expressions: %w",
+                kind, err))
+        } else {
+            // sanity checks
+            if len(valueTypeNames) != len(names) {
+                cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+                    "%d types extracted from %s value " +
+                    "expressions does not match %d declared names",
+                    len(valueTypeNames), kind, len(names)))
+            }
+        }
+    } else {
+        cumulErr = log.CombineErrors(cumulErr, fmt.Errorf(
+            "%s has no value expression", kind))
+    }
+
+    for i, declName := range names {
+        typeName := ""
+        if valueTypeNames != nil && i < len(valueTypeNames) {
+            typeName = valueTypeNames[i]
+        } else {
+            typeName = "<unknown>"
+        }
+        cfg.Decls = append(cfg.Decls, Decl{declName, typeName})
+    }
+
+    return cumulErr
+}
+
 func visitVarDeclaration(
     cfg *CFG,
     code []byte,
@@ -901,6 +992,12 @@ func visitNode(
         err := visitImportDeclaration(cfg, code, source, dest, cursor)
         if err != nil {
             return fmt.Errorf("failed to process import_declaration: %w", err)
+        }
+
+    case "short_var_declaration":
+        err := visitShortVarDeclaration(cfg, code, source, dest, cursor)
+        if err != nil {
+            return fmt.Errorf("failed to process var_declaration: %w", err)
         }
 
     case "var_declaration":
